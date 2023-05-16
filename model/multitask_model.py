@@ -58,7 +58,7 @@ class BARTmultitask(PretrainedBartModel):
 
         if generation_labels is not None:
             generation_labels = generation_labels.to(generation_logits.device)
-            generation_loss = self.loss_fct(generation_logits.view(-1, self.config.vocab_size), generation_labels.view(-1))
+            generation_loss = self.geneariton_loss_fct(generation_logits.view(-1, self.config.vocab_size), generation_labels.view(-1))
 
         return {
             'classification_loss': classification_loss,
