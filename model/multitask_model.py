@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 from transformers.models.bart.modeling_bart import (
     BartModel, PretrainedBartModel, BartClassificationHead
@@ -26,6 +27,24 @@ class BARTmultitask(PretrainedBartModel):
 
         self.classification_loss_fct = torch.nn.BCEWithLogitsLoss()
         self.generation_loss_fct = torch.nn.CrossEntropyLoss()
+
+
+    def resize_token_embeddings(self, new_num_tokens: int) -> nn.Embedding:
+        old_num_tokens = self.model.shared.num_embeddings
+        new_embeddings = super().resize_token_embeddings(new_num_tokens)
+        self.model.shared = new_embeddings
+        self._resize_final_logits_bias(new_num_tokens, old_num_tokens)
+        return new_embeddings
+
+
+    def _resize_final_logits_bias(self, new_num_tokens: int, old_num_tokens) -> None:
+        if new_num_tokens <= old_num_tokens:
+            new_bias = self.final_logits_bias[:, :new_num_tokens]
+        else:
+            extra_bias = torch.zeros((1, new_num_tokens - old_num_tokens),
+                                     device=self.final_logits_bias.device)
+            new_bias = torch.cat([self.final_logits_bias, extra_bias], dim=1)
+        self.register_buffer("final_logits_bias", new_bias)
 
 
     def forward(self,
