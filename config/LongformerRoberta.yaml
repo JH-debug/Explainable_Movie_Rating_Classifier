@@ -1,0 +1,56 @@
+# data
+data_dir: '/home/jhlee/Explainable_Movie_Rating_Classifier/data/'
+
+num_gpus: [1,2,3]
+batch_size: 2
+num_workers: 4
+
+lr: 1e-3 # 3e-5
+weight_decay: 0.01
+adam_epsilon: 0.99
+warmup_steps: 100
+
+resume_training: False
+model_name_or_path: 'klue/roberta-large'
+num_labels: 4
+max_length: 4096
+
+# data
+data:
+  data_dir: ${data_dir}
+  use: 'Subtitle'  # LLM_infer
+
+  dataloader_params:
+    batch_size: ${batch_size}
+    num_workers: ${num_workers}
+    shuffle: False
+
+# early_stopping
+patience: 5
+
+# trainer
+trainer:
+  accelerator: "auto"
+  devices: ${num_gpus}
+  check_val_every_n_epoch: 1
+  log_every_n_steps: 100
+  accumulate_grad_batches: 1
+  max_epochs: 300
+  enable_checkpointing: true
+  enable_progress_bar: true
+  enable_model_summary: true
+
+# wandb logger
+project: 유해성
+name: Longformer-Roberta-Large-1e-3
+
+checkpoint_dir: "model_save/"
+
+hydra:
+  run:
+    dir: "outputs/${name}"
+
+# saved model_path
+test: False
+test_model_path:
+test_save_path:
