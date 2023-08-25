@@ -1,18 +1,16 @@
-import json, ast
 import os
 import torch
 import transformers
 from transformers import AutoTokenizer, GPTNeoXTokenizerFast, AutoModelForCausalLM, BitsAndBytesConfig
-from peft import get_peft_model, get_peft_model_state_dict, IA3Config, LoraConfig
+from peft import (get_peft_model, get_peft_model_state_dict, prepare_model_for_int8_training,
+                  IA3Config, LoraConfig)
 from datasets import load_dataset
 
-from pytorch_lightning.strategies import DDPStrategy
 from utils import Prompter
 
 
 os.environ["WANDB_PROJECT"] = "유해성"
 os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 os.environ["PL_TORCH_DISTRIBUTED_BACKEND"] = "gloo"
 
 def print_trainable_parameters(model):
@@ -42,8 +40,10 @@ tokenizer = AutoTokenizer.from_pretrained(model_id)
 tokenizer.padding_side = "left"
 
 model = AutoModelForCausalLM.from_pretrained(model_id, quantization_config=bnb_config,
-                                             torch_dtype=torch.float16,
-                                             device_map='auto')
+                                             # torch_dtype=torch.float16,
+                                             device_map="auto")
+                                             # {"":0})
+model = prepare_model_for_int8_training(model)
 # config = LoraConfig(
 #     r=2,
 #     lora_alpha=4,
@@ -60,7 +60,6 @@ print_trainable_parameters(model)
 # for i in model.named_parameters():
 #     print(f"{i[0]} -> {i[1].device}")
 
-
 data = load_dataset("json", data_files={"train": "data/llm_train.json", "test": "data/llm_test.json"})
 prompter = Prompter()
 cutoff_len = 2048
@@ -75,7 +74,7 @@ if ddp:
     device_map = {"": int(os.environ.get("LOCAL_RANK") or 0)}
     gradient_accumulation_steps = gradient_accumulation_steps // world_size
 
-def tokenize(prompt, add_eos_token=False):
+def tokenize(prompt, add_eos_token=True):
     # there's probably a way to do this with the tokenizer settings
     # but again, gotta move fast
     result = tokenizer(
@@ -110,6 +109,11 @@ def generate_and_tokenize_prompt(data_point):
 train_data = data["train"].map(generate_and_tokenize_prompt)
 test_data = data["test"].map(generate_and_tokenize_prompt)
 
+if not ddp and torch.cuda.device_count() > 1:
+    # keeps Trainer from trying its own DataParallelism when more than 1 gpu is available
+    model.is_parallelizable = True
+    model.model_parallel = True
+
 trainer = transformers.Trainer(
     model=model,
     train_dataset= train_data,
@@ -124,19 +128,16 @@ trainer = transformers.Trainer(
         logging_steps=1,
         optim='adamw_torch',
         evaluation_strategy="steps",
-        save_strategy="steps",
-        eval_steps=200,
-        save_steps=200,
+        save_strategy="epoch",
         output_dir="outputs",
         save_total_limit=3,
         load_best_model_at_end=True,
         report_to="wandb",
         run_name="llm_kullum",
         ddp_find_unused_parameters=False if ddp else None),
-    data_collator=transformers.DataCollatorForSeq2Seq(tokenizer,
-                                                       pad_to_multiple_of=8,
-                                                       return_tensors='pt',
-                                                       padding=True)
+    data_collator=transformers.DataCollatorForSeq2Seq(
+        tokenizer, pad_to_multiple_of=8, return_tensors="pt", padding=True
+    ),
 )
 model.config.use_cache = False  # silence the warnings. Please re-enable for inference!
 old_state_dict = model.state_dict

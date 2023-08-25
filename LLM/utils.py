@@ -34,7 +34,12 @@ class Prompter(object):
 
 if __name__ == "__main__":
     from datasets import load_dataset
-    data = load_dataset("json", data_files={"train": "llm_train.json", "test": "llm_test.json"})
+    data = load_dataset("json", data_files={"train": "data/llm_train.json", "test": "data/llm_test.json"})
+    print(data['train'])
     prompter = Prompter()
-    for i in range(3):
+    for i in range(2):
         print(prompter.generate_prompt(data["train"][i]["instruction"], data["train"][i]["input"], data["train"][i]["output"]))
+
+    from train import generate_and_tokenize_prompt
+    train_data = data["train"].map(generate_and_tokenize_prompt)
+    print(train_data[0])
