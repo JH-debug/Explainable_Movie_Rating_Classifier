@@ -88,7 +88,7 @@ class SumGenModel(LightningModule):
                                  model_name_or_path="klue/bert-base", verbose=True)
 
         for key in bert_scores.keys():
-            self.log_dict({key: np.mean(bert_scores[key])}, on_epoch=True, sync_dist=True, prog_bar=True, logger=True)
+            self.log_dict({key: np.nanmean(bert_scores[key])}, on_epoch=True, sync_dist=True, prog_bar=True, logger=True)
         self.log_dict(self.rouge_score.compute(), on_epoch=True, sync_dist=True, prog_bar=True, logger=True)
         self.log('bleu_score', self.bleu_score.compute(), on_epoch=True, sync_dist=True, prog_bar=True, logger=True)
         self.log('sacre_bleu', self.sacre_bleu.compute(), on_epoch=True, sync_dist=True, prog_bar=True, logger=True)
@@ -112,7 +112,7 @@ class SumGenModel(LightningModule):
         bert_scores = bert_score(self.test_output['preds'], self.test_output['labels'],
                                  model_name_or_path="klue/bert-base", verbose=True)
         for key in bert_scores.keys():
-            self.log_dict({key: np.mean(bert_scores[key])}, on_epoch=True, sync_dist=True, prog_bar=True, logger=True)
+            self.log_dict({key: np.nanmean(bert_scores[key])}, on_epoch=True, sync_dist=True, prog_bar=True, logger=True)
         self.log_dict(self.rouge_score.compute(), on_epoch=True, sync_dist=True, prog_bar=True, logger=True)
         self.log('bleu_score', self.bleu_score.compute(), on_epoch=True, sync_dist=True, prog_bar=True, logger=True)
         self.log('sacre_bleu', self.sacre_bleu.compute(), on_epoch=True, sync_dist=True, prog_bar=True, logger=True)
