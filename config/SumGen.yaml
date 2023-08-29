@@ -1,0 +1,47 @@
+num_gpus: [0] # [1,2,3]
+batch_size: 2
+num_workers: 2
+
+lr: 1e-4 # 3e-5
+weight_decay: 0.01
+adam_epsilon: 0.99
+warmup_steps: 100
+
+model_name_or_path: 'gogamza/kobart-base-v2' # 'KETI-AIR-Downstream/long-ke-t5-base-summarization'
+max_length: 512
+
+# data
+data:
+  dataloader_params:
+    batch_size: ${batch_size}
+    num_workers: ${num_workers}
+    shuffle: False
+
+# early_stopping
+patience: 5
+
+# trainer
+trainer:
+  accelerator: "auto"
+  devices: ${num_gpus}
+  check_val_every_n_epoch: 1
+  log_every_n_steps: 100
+  accumulate_grad_batches: 1
+  max_epochs: 500
+  enable_checkpointing: true
+  enable_progress_bar: true
+  enable_model_summary: true
+
+# wandb logger
+project: 유해성
+name: kobart-base-summarization # long-T5-base-summarization
+
+checkpoint_dir: "model_save/"
+
+hydra:
+  run:
+    dir: "outputs/${name}"
+
+# saved model_path
+test_model_path:
+test_save_path:

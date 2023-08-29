@@ -149,4 +149,4 @@ trainer.train(resume_from_checkpoint=None)
 
 # save the model
 output_dir = "outputs"
-trainer.save_pretrained(output_dir)
+trainer.save_model(output_dir)
