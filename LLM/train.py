@@ -28,6 +28,7 @@ def print_trainable_parameters(model):
     )
 
 model_id = "nlpai-lab/kullm-polyglot-5.8b-v2"
+model_id = "beomi/llama-2-ko-7b"
 bnb_config = BitsAndBytesConfig(
     load_in_8bit=True,
     bnb_8bit_use_double_quant=True,
@@ -148,5 +149,5 @@ model.state_dict = (lambda self, *_, **__: get_peft_model_state_dict(self, old_s
 trainer.train(resume_from_checkpoint=None)
 
 # save the model
-output_dir = "outputs"
+output_dir = "outputs/llama2"
 trainer.save_model(output_dir)

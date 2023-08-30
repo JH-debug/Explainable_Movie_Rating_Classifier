@@ -1,5 +1,7 @@
 import torch
-from transformers import AutoConfig, AutoModel, AutoTokenizer, AutoModelForSeq2SeqLM, DataCollatorForSeq2Seq
+from transformers import (AutoConfig, AutoModel, AutoTokenizer,
+                          AutoModelForSeq2SeqLM, DataCollatorForSeq2Seq,
+                          AutoModelForCausalLM)
 from pytorch_lightning import LightningModule
 from transformers import get_linear_schedule_with_warmup
 import logging
@@ -7,6 +9,7 @@ from torchmetrics.functional.text.bert import bert_score
 from torchmetrics.text import BLEUScore, SacreBLEUScore
 from torchmetrics.text.rouge import ROUGEScore
 import numpy as np
+import json
 
 from sum_gen_dataset import SumGenDataset
 
@@ -17,11 +20,17 @@ class SumGenModel(LightningModule):
         self.cfg = cfg
         self.trainer = trainer
         self.config = AutoConfig.from_pretrained(cfg.model_name_or_path)
-        self.model = AutoModelForSeq2SeqLM.from_pretrained(cfg.model_name_or_path)
+        if 'gpt' in cfg.model_name_or_path:
+            self.model = AutoModelForCausalLM.from_pretrained(cfg.model_name_or_path)
+        else:
+            self.model = AutoModelForSeq2SeqLM.from_pretrained(cfg.model_name_or_path)
         self.tokenizer = AutoTokenizer.from_pretrained(cfg.model_name_or_path)
         self.tokenizer.deprecation_warnings["Asking-to-pad-a-fast-tokenizer"] = True
+        if self.tokenizer.pad_token is None:
+            self.tokenizer.add_special_tokens({'pad_token': '[PAD]'})
+        self.model.resize_token_embeddings(len(self.tokenizer))
         self.data_collator = DataCollatorForSeq2Seq(self.tokenizer, model=self.model,
-                                                    label_pad_token_id=self.tokenizer.pad_token_id)
+                                                        label_pad_token_id=self.tokenizer.pad_token_id)
         self.max_length = cfg.max_length
         self.configure_metrics()
 
@@ -53,7 +62,10 @@ class SumGenModel(LightningModule):
         return [optimizer], [scheduler]
 
     def forward(self, batch):
-        outputs = self.model(**batch)
+        if 'gpt' in self.cfg.model_name_or_path:
+            outputs = self.model(input_ids=batch['input_ids'], labels=batch['labels'])
+        else:
+            outputs = self.model(**batch)
         return outputs.loss
     def configure_metrics(self):
         self.bleu_score = BLEUScore(n_gram=1, smooth=True)
@@ -68,7 +80,10 @@ class SumGenModel(LightningModule):
     def validation_step(self, batch, batch_idx):
         loss = self(batch)
         predictions = self.model.generate(input_ids=batch['input_ids'], attention_mask=batch['attention_mask'])
-        labels = batch['decoder_input_ids']
+        if 'gpt' in self.cfg.model_name_or_path:
+            labels = batch['labels']
+        else:
+            labels = batch['decoder_input_ids']
 
         for pred, label in zip(predictions, labels):
             pred = self.tokenizer.decode(pred, skip_special_tokens=True)
@@ -97,7 +112,10 @@ class SumGenModel(LightningModule):
     def test_step(self, batch, batch_idx):
         loss = self(batch)
         predictions = self.model.generate(input_ids=batch['input_ids'], attention_mask=batch['attention_mask'])
-        labels = batch['decoder_input_ids']
+        if 'gpt' in self.cfg.model_name_or_path:
+            labels = batch['labels']
+        else:
+            labels = batch['decoder_input_ids']
 
         for pred, label in zip(predictions, labels):
             pred = self.tokenizer.decode(pred, skip_special_tokens=True)
@@ -117,6 +135,9 @@ class SumGenModel(LightningModule):
         self.log('bleu_score', self.bleu_score.compute(), on_epoch=True, sync_dist=True, prog_bar=True, logger=True)
         self.log('sacre_bleu', self.sacre_bleu.compute(), on_epoch=True, sync_dist=True, prog_bar=True, logger=True)
         self.configure_metrics()
+
+        with open(f'{self.cfg.test_save_path}', 'w', encoding='utf-8') as f:
+            json.dump(self.test_output, f, ensure_ascii=False, indent=4)
 
     def _loader(self, data_config, split):
         dataset = SumGenDataset(tokenizer=self.tokenizer,
