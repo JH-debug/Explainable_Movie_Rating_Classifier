@@ -37,7 +37,7 @@ bnb_config = BitsAndBytesConfig(
 )
 
 tokenizer = AutoTokenizer.from_pretrained(model_id)
-# tokenizer.pad_token = tokenizer.eos_token
+tokenizer.pad_token = tokenizer.eos_token
 tokenizer.padding_side = "left"
 
 model = AutoModelForCausalLM.from_pretrained(model_id, quantization_config=bnb_config,
